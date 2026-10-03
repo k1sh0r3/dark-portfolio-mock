@@ -148,6 +148,29 @@ body{
 .footer-bottom a{color:var(--muted);text-decoration:none;margin-left:18px}
 .footer-bottom a:hover{color:var(--orange)}
 
+/* hidden terminal */
+.term-overlay{position:fixed;inset:0;z-index:200;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(4,4,6,.62);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.term-overlay.open{display:flex}
+.term{width:min(680px,100%);background:#0c0c0f;border:1px solid rgba(255,106,0,.4);border-radius:12px;box-shadow:0 30px 80px rgba(0,0,0,.65),0 0 44px rgba(255,106,0,.1);display:flex;flex-direction:column;overflow:hidden;font-family:'JetBrains Mono',monospace}
+.term-bar{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border)}
+.term-bar .dots{display:flex;gap:6px}
+.term-bar .dots i{width:11px;height:11px;border-radius:50%}
+.term-title{font-size:.76rem;color:var(--muted)}
+.term-close{margin-left:auto;background:none;border:none;color:var(--muted);font-size:1.05rem;cursor:pointer;font-family:inherit;line-height:1;padding:2px 6px}
+.term-close:hover{color:var(--orange)}
+.term-body{padding:16px 18px;overflow-y:auto;min-height:220px;max-height:min(52vh,420px);font-size:.87rem;line-height:1.75;cursor:text}
+.term-line{white-space:pre-wrap;word-break:break-word;margin-bottom:2px}
+.term-line .p{color:var(--orange);margin-right:8px}
+.term-out{color:#d4d4d8}
+.term-out a{color:var(--orange);text-decoration:none;border-bottom:1px solid rgba(255,106,0,.45)}
+.term-out a:hover{color:var(--orange-hi)}
+.term-dim{color:var(--muted)}
+.term-err{color:#f87171}
+.term-input-line{display:flex;align-items:center}
+.term-input{flex:1;background:transparent;border:none;outline:none;color:var(--text);font-family:inherit;font-size:inherit;caret-color:var(--orange);min-width:0}
+.term-hint{margin-top:28px;font-family:'JetBrains Mono',monospace;font-size:.78rem;color:#52525b}
+.term-hint kbd{border:1px solid var(--border);border-radius:6px;padding:1px 8px;color:var(--muted);background:rgba(255,255,255,.03);font-family:inherit;font-size:.76rem}
+
 /* reveal */
 .reveal{opacity:0;transform:translateY(22px);transition:opacity .7s ease,transform .7s ease}
 .reveal.in{opacity:1;transform:none}
@@ -158,7 +181,7 @@ body{
 
 <header class="nav">
   <div class="wrap nav-inner">
-    <a class="brand" href="#">SKA<span>.</span></a>
+    <a class="brand" href="#" id="brandTerm" title="Open terminal">SKA<span>.</span></a>
     <nav class="menu">
       <a href="#about">About</a>
       <a href="#work">Work</a>
@@ -282,6 +305,7 @@ body{
       <a class="btn btn-ghost" href="https://github.com/k1sh0r3" target="_blank" rel="noopener">GitHub</a>
       <a class="btn btn-ghost" href="https://www.linkedin.com/in/kishore0451/" target="_blank" rel="noopener">LinkedIn</a>
     </div>
+    <p class="term-hint reveal">tip: press <kbd>`</kbd> — or tap the logo — to open a terminal</p>
     <div class="footer-bottom">
       <p>© 2026 Siva Kishore Reddy Allu. All rights reserved. <span class="mono" style="color:#52525b">— dark concept mock</span></p>
       <p>Cincinnati, Ohio</p>
@@ -289,12 +313,170 @@ body{
   </div>
 </footer>
 
+<!-- hidden terminal easter egg -->
+<div class="term-overlay" id="termOverlay">
+  <div class="term" role="dialog" aria-modal="true" aria-label="Site terminal">
+    <div class="term-bar">
+      <span class="dots"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></span>
+      <span class="term-title">kishore@run: ~</span>
+      <button class="term-close" id="termClose" aria-label="Close terminal">×</button>
+    </div>
+    <div class="term-body" id="termBody"></div>
+  </div>
+</div>
+
 <script>
 // fade-in on scroll
 const io = new IntersectionObserver((entries)=>{
   entries.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); } });
 },{threshold:.12});
 document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+</script>
+<script>
+// ---- hidden terminal easter egg ----
+(function(){
+  var overlay = document.getElementById('termOverlay');
+  var body = document.getElementById('termBody');
+  var brand = document.getElementById('brandTerm');
+  var open = false, booted = false;
+  var history = [], hIdx = 0;
+
+  function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function scroll(){ body.scrollTop = body.scrollHeight; }
+  function printText(t, cls){
+    var d = document.createElement('div');
+    d.className = 'term-line term-out ' + (cls || '');
+    d.textContent = t; body.appendChild(d); scroll();
+  }
+  function printHtml(h, cls){
+    var d = document.createElement('div');
+    d.className = 'term-line term-out ' + (cls || '');
+    d.innerHTML = h; body.appendChild(d); scroll();
+  }
+  function prompt(){
+    var line = document.createElement('div');
+    line.className = 'term-line term-input-line';
+    var p = document.createElement('span');
+    p.className = 'p'; p.textContent = '$'; line.appendChild(p);
+    var input = document.createElement('input');
+    input.className = 'term-input';
+    input.setAttribute('aria-label', 'Terminal command input');
+    input.setAttribute('spellcheck', 'false');
+    input.setAttribute('autocomplete', 'off');
+    input.setAttribute('autocapitalize', 'off');
+    line.appendChild(input);
+    body.appendChild(line); scroll();
+    input.addEventListener('keydown', function(e){
+      if (e.key === 'Enter'){
+        var v = input.value; input.disabled = true; run(v);
+      } else if (e.key === 'ArrowUp'){
+        e.preventDefault();
+        if (history.length && hIdx > 0){ hIdx--; input.value = history[hIdx]; }
+      } else if (e.key === 'ArrowDown'){
+        e.preventDefault();
+        if (history.length && hIdx < history.length){ hIdx++; input.value = history[hIdx] || ''; }
+      }
+    });
+    setTimeout(function(){ input.focus(); }, 30);
+  }
+
+  var PROJECTS = [
+    ['SQLSentinel', 'trust-but-verify for AI-written SQL', 'https://k1sh0r3.github.io/SQLSentinel/'],
+    ['BlastRadius', 'column-level lineage: know what breaks', 'https://k1sh0r3.github.io/BlastRadius/'],
+    ['PreSQL', 'SQL safety layer for AI agents (MCP)', 'https://github.com/k1sh0r3/preSQL'],
+    ['HireRadar', 'visa-friendly job board, daily pipeline', 'https://k1sh0r3.github.io/HireRadar/'],
+    ['SeevForge', 'AI resume builder + ATS scoring', 'https://k1sh0r3.github.io/SeevForge/'],
+    ['CtrlZAPI', 'daily archive of 33 public APIs', 'https://k1sh0r3.github.io/CtrlZAPI/']
+  ];
+
+  var COMMANDS = {
+    help: function(){
+      printText("available commands:\n  whoami        who is kishore\n  projects      what he's shipped\n  skills        the toolbox\n  experience    where he's worked\n  contact       how to reach him\n  goto <page>   jump to about | work | skills | contact\n  hire          make a great decision\n  clear         clear the terminal\n  exit          close the terminal");
+    },
+    whoami: function(){
+      printText("Siva Kishore Reddy Allu\nData Engineer · Cincinnati, Ohio\nMS Information Technology, University of Cincinnati");
+    },
+    projects: function(){
+      printHtml(PROJECTS.map(function(p){
+        return '<a href="' + p[2] + '" target="_blank" rel="noopener">' + p[0] + '</a> — ' + p[1];
+      }).join('\n'));
+    },
+    skills: function(){
+      printText("Python · SQL · PySpark · AWS Glue · S3 · EC2 · Docker · Tableau\nTypeScript · JavaScript · Data Modeling · ETL Design · CI/CD · REST APIs");
+    },
+    experience: function(){
+      printText("Wipro Ltd — Project Engineer, 2020–2023\n  AWS Glue + PySpark ETL, delta loads, Tableau dashboards\nUniversity of Cincinnati — MS, Information Technology, 2023–2024");
+    },
+    contact: function(){
+      printHtml('email    → <a href="mailto:sivakishorereddyallu@gmail.com">sivakishorereddyallu@gmail.com</a>\ngithub   → <a href="https://github.com/k1sh0r3" target="_blank" rel="noopener">github.com/k1sh0r3</a>\nlinkedin → <a href="https://www.linkedin.com/in/kishore0451/" target="_blank" rel="noopener">linkedin.com/in/kishore0451</a>');
+    },
+    hire: function(){
+      printHtml('Excellent choice.\n→ <a href="mailto:sivakishorereddyallu@gmail.com">sivakishorereddyallu@gmail.com</a>');
+    },
+    sudo: function(){
+      printText("user is not in the sudoers file. This incident will be reported to kishore.", "term-err");
+    }
+  };
+
+  function run(raw){
+    var line = raw.trim();
+    printHtml('<span class="p">$</span>' + esc(raw));
+    if (!line){ prompt(); return; }
+    history.push(line); hIdx = history.length;
+    var parts = line.split(/\s+/);
+    var cmd = parts[0].toLowerCase();
+    var arg = (parts[1] || '').toLowerCase();
+    if (cmd === 'clear'){ body.innerHTML = ''; prompt(); return; }
+    if (cmd === 'exit'){ closeTerm(); return; }
+    if (cmd === 'goto'){
+      var map = { about: 'about', work: 'work', skills: 'skills', contact: 'contact' };
+      if (map[arg]){
+        printText('jumping to #' + arg + '…');
+        closeTerm();
+        setTimeout(function(){ document.getElementById(map[arg]).scrollIntoView({ behavior: 'smooth' }); }, 60);
+      } else {
+        printText("usage: goto <about | work | skills | contact>", "term-err");
+        prompt();
+      }
+      return;
+    }
+    if (cmd === 'rm'){ printText("Nice try.", "term-err"); prompt(); return; }
+    if (COMMANDS[cmd]){ COMMANDS[cmd](); prompt(); return; }
+    printText("command not found: " + parts[0] + " — type 'help'.", "term-err");
+    prompt();
+  }
+
+  function openTerm(){
+    if (open) return;
+    open = true;
+    overlay.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    if (!booted){
+      booted = true;
+      printText("kishore.run — interactive terminal\ntype 'help' to see what I can do.", "term-dim");
+    }
+    prompt();
+  }
+  function closeTerm(){
+    if (!open) return;
+    open = false;
+    overlay.classList.remove('open');
+    document.body.style.overflow = '';
+  }
+
+  document.getElementById('termClose').addEventListener('click', closeTerm);
+  overlay.addEventListener('click', function(e){ if (e.target === overlay) closeTerm(); });
+  body.addEventListener('click', function(){
+    var i = body.querySelector('.term-input:not([disabled])');
+    if (i) i.focus();
+  });
+  brand.addEventListener('click', function(e){ e.preventDefault(); open ? closeTerm() : openTerm(); });
+  document.addEventListener('keydown', function(e){
+    var inTerm = e.target && e.target.closest && e.target.closest('.term');
+    if (e.key === '`' && !inTerm){ e.preventDefault(); open ? closeTerm() : openTerm(); }
+    else if (e.key === 'Escape' && open){ closeTerm(); }
+  });
+})();
 </script>
 </body>
 </html>
